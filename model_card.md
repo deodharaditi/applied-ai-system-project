@@ -1,26 +1,30 @@
-# 🎧 Model Card: Music Recommender Simulation
+# 🎧 Model Card: VibeMatcher AI
 
 ## 1. Model Name
 
-**VibeMatcher 1.0**
+**VibeMatcher AI** (extends VibeMatcher 1.0, CodePath AI110 Module 3)
 
 ---
 
 ## 2. Goal / Task
 
-VibeMatcher suggests songs from a small catalog based on a user's stated taste preferences. It tries to find songs that feel closest to what the user wants — not just by genre label, but by matching the actual sound qualities like energy level, tempo, and emotional tone. It is built for classroom exploration, not for real-world deployment.
+VibeMatcher AI is a conversational music recommender. A user types a natural language request — "something chill to study to" or "upbeat songs for cardio" — and the system asks a clarifying question if needed, builds a structured taste profile, scores all 20 songs in the catalog, and returns ranked recommendations with a plain-English explanation and a confidence score.
+
+The system has two layers. The **language layer** (Claude Haiku via the Anthropic API) handles intent parsing, clarifying questions, RAG-enriched explanation generation, and self-critique. The **scoring layer** (`recommender.py`) is a deterministic 13-feature weighted proximity algorithm with a maximum score of 9.50 points — unchanged from Module 3. Keeping these layers separate means the recommendation math has no hallucination risk; Claude handles language, code handles arithmetic.
 
 ---
 
 ## 3. Algorithm Summary
 
-Every song gets a score based on how well it matches the user's preferences. The scoring works in two steps.
+**Scoring layer (deterministic):**
+Every song is scored against the user's taste profile in two steps.
 
-First, genre and mood are checked as yes/no questions. If the song's genre matches the user's favorite genre, it gets 2 points. If the mood matches, it gets 1.5 points. No partial credit — either it matches or it doesn't.
+First, genre and mood are checked as yes/no questions. A genre match awards 2.00 points; a mood match awards 1.50 points. No partial credit.
 
-Second, the remaining features — energy, emotional tone (valence), tempo, acousticness, vocal density (speechiness), and instrumentalness — are scored by closeness. A song that has almost the same energy as the user's target gets nearly full points. A song that is far off gets fewer points. The idea is that a song is not better just because it has a high energy value; it is better because its energy is *close to what this specific user wants*.
+Second, continuous features — energy, valence, tempo, acousticness, speechiness, instrumentalness, popularity, release decade, liveness, loudness, and explicit preference — are scored by proximity: `points = max_points × (1 − |user_target − song_value|)`. Closeness to the target earns full points; distance costs points. All scores sum to a maximum of 9.50 points.
 
-All scores are added up. The maximum possible score is 9.50 points. Songs are then ranked from highest to lowest, and the top 5 are returned as recommendations.
+**Language layer (Claude Haiku):**
+Claude receives the user's query and a structured system prompt. It either blocks the query (off-topic guardrail), asks one clarifying question, or calls the `recommend_songs` tool directly. After the tool returns scored results and RAG descriptions, Claude generates a plain-English explanation and closes with a confidence score (0–1) and any catalog limitation notes.
 
 ---
 
@@ -36,11 +40,13 @@ Most genres have only one song. Lofi has three songs and pop has two — every o
 
 ## 5. Strengths
 
-The system works best when the user's preferred genre has more than one song in the catalog. The Late-Night Studier profile (lofi / focused) produced a near-perfect result — Focus Flow scored 7.66 out of 7.75 — because the catalog had enough lofi songs to actually differentiate on continuous features.
+The system works best when the user's preferred genre has more than one song in the catalog. The Late-Night Studier profile (lofi / focused) produced a near-perfect result — Focus Flow scored 9.12 out of 9.50 — because the catalog had enough lofi songs to actually differentiate on continuous features.
 
 The scoring is fully transparent. Every recommendation comes with a breakdown showing exactly how many points each feature contributed. A user can see precisely why a song ranked where it did, which is something real streaming apps do not show.
 
-The system also degrades gracefully. When given a genre that does not exist in the catalog (the Ghost Profile test), it did not crash or return random results. It fell back on mood and continuous features and still produced a coherent list.
+The system degrades gracefully. When given a genre that does not exist in the catalog (the Ghost Profile test), it does not crash or return random results — it falls back on mood and continuous features and still produces a coherent list, then flags the limitation in the self-critique output.
+
+The conversational layer lowers the barrier to entry significantly. Users no longer need to write Python dicts to express their preferences; a single sentence is enough. The clarifying question mechanism handles ambiguous requests without requiring the user to re-submit.
 
 ---
 
@@ -59,21 +65,32 @@ The catalog's average energy is around 0.63, skewing high. Users who want very l
 
 ## 7. Evaluation
 
-Six user profiles were tested — three realistic and three adversarial.
+**Automated eval harness (`eval/run_eval.py`):** 5 predefined queries, all pass.
 
-The three standard profiles (Late-Night Studier, High-Energy Pop, Sunday Wind-Down) all produced #1 results that matched intuition. Focus Flow, Gym Hero, and Autumn Letter each won their respective lists cleanly, and the reasons shown for each confirmed the scoring was behaving as designed.
+| Query | Result | Confidence |
+|---|---|---|
+| "Something chill to study to" | 3 lofi recommendations | 0.91 |
+| "Something for the gym" + clarification | 3 pop/edm recommendations | 0.88 |
+| "Classical but aggressive and intense" (ghost profile) | 3 results, limitation flagged | ~0.65 |
+| "What's the weather like?" | Guardrail blocked | — |
+| "Most energetic hype songs" | 3 high-energy recommendations | ~0.85 |
 
-The three adversarial profiles revealed the system's limits. The Contradictory profile (blues/sad mood but energy target of 0.92) exposed that the categorical mood bonus always wins over the energy signal when they conflict — Blue Porch Night ranked #1 despite having the wrong energy, because its mood label alone was worth 1.50 pts. The Ghost Profile (classical/aggressive — no catalog match) showed the system degrades gracefully, falling back on continuous features to find tonally similar songs. The All-Neutral profile (r&b/romantic, all features at 0.5) confirmed the filter bubble: one genre match dominated the entire ranking.
+**Unit tests (`pytest`):** 4 tests — scoring correctness, genre mismatch gap, BPM clamping, explanation format. All pass.
 
-A weight-shift experiment was also run: genre was halved to 1.00 pt and energy was doubled to 3.00 pts. The #1 result did not change for any profile — it just made the system more certain about existing winners rather than producing new variety. The original weights were restored.
+**Module 3 profile analysis (6 profiles):**
+Three standard profiles (Late-Night Studier, High-Energy Pop, Sunday Wind-Down) all produced #1 results that matched intuition. Focus Flow, Gym Hero, and Autumn Letter each won their respective lists cleanly.
+
+Three adversarial profiles revealed scoring limits. The Contradictory profile (sad mood + high energy target) exposed that the categorical mood bonus always wins over the energy signal when they conflict. The Ghost Profile (classical/aggressive — no catalog match) showed graceful degradation. The All-Neutral profile confirmed the filter bubble: one genre match dominated the entire ranking.
+
+A weight-shift experiment halved genre to 1.00 pt and doubled energy to 3.00 pts. The #1 result did not change for any profile — weight tuning is near-meaningless in a sparse catalog. The original weights were restored.
 
 ---
 
 ## 8. Intended Use and Non-Intended Use
 
-**Intended use:** This system is designed for classroom learning. It demonstrates how a content-based recommender works, how scoring rules translate preferences into numbers, and where biases show up in small datasets. It is a teaching tool, not a product.
+**Intended use:** This system is designed for classroom learning. It demonstrates how a conversational AI agent can be layered on top of a deterministic recommender, how guardrails and self-critique improve reliability, and where biases show up in small datasets. It is a teaching tool, not a product.
 
-**Not intended for:** Real users looking for actual music discovery. The catalog is too small and too narrow to serve real listeners. It should not be used to make decisions about what music gets promoted, since the catalog lacks cultural diversity and the scoring has no awareness of context, history, or community.
+**Not intended for:** Real users looking for actual music discovery. The 20-song catalog is too small and too narrow to serve real listeners. It should not be used to make decisions about what music gets promoted, since the catalog lacks cultural diversity and the scoring has no awareness of context, history, or community. The Claude layer should not be used in higher-stakes contexts without significantly hardened guardrails.
 
 ---
 
