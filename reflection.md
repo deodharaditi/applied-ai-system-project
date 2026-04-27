@@ -1,4 +1,38 @@
-# Reflection — Profile Comparisons
+# Reflection — VibeMatcher AI
+
+## Responsible AI
+
+### Limitations and biases
+
+The most fundamental limitation is catalog size. With only 20 songs, 12 of which represent a unique genre, the recommender almost always has one winner per genre before any continuous features are compared. The agent can ask clarifying questions and build a detailed profile, but if the catalog has nothing close to what the user wants, Claude is explaining a bad match rather than finding a good one — and the self-critique confidence score is the only signal that something is off.
+
+There is also a language bias baked into the system prompt. The few-shot examples and mood vocabulary are tuned for English-speaking listening contexts: "studying," "gym," "winding down." A user who describes their context differently — or uses a language other than English — may get a less accurate profile parse. The valid genre and mood lists are also fixed to whatever labels exist in `songs.csv`, which skews toward Western genres and leaves out entire categories of global music.
+
+Finally, Claude's interpretation of vague phrases like "something for the gym" is not deterministic. Two identical queries in separate sessions may result in slightly different profiles, which means slightly different top-3 results. The scoring math is deterministic; the language layer is not.
+
+### Misuse potential
+
+For a music recommender the misuse surface is low, but two risks are worth naming. First, the input guardrail only catches clearly off-topic queries — a determined user could phrase non-music requests in music terms and extract a few free Claude calls. This is not harmful at small scale but would matter in a deployed, metered API context; rate limiting per session would address it. Second, this project is a template. The same agent architecture — guardrail, profile extraction, tool call, self-critique — could be adapted to systems that handle sensitive information. Anyone reusing this code in a higher-stakes context would need to significantly harden the guardrails and add output filtering, which this system does not have.
+
+### What surprised me during reliability testing
+
+Two things were unexpected. The first was how the "pydantic serialization" bug manifested: the first API call worked perfectly, the tool executed correctly, results logged fine — and then the second call (asking Claude to explain the results) crashed with a type error inside the SDK. The system looked like it was working until the moment it needed to actually finish the job. That taught me to test the full pipeline end-to-end and not assume a partial run means things are fine.
+
+The second surprise was that the ghost-profile test — "classical music that is aggressive and really intense" — passed all three checks (not guardrail, has recommendations, has confidence). The agent did not know classical and aggressive were contradictory; it just called the tool with those values, got a ranked list, and explained it. The self-critique correctly noted catalog limitations, but the system still returned something. In a real product, a lower confidence threshold might warrant a different response ("I could not find a close match — here is the nearest alternative") rather than presenting a weak match confidently.
+
+---
+
+### AI collaboration during this project
+
+**One instance where the AI suggestion was helpful:**
+When designing how Python would detect guardrail hits from Claude's response, the suggestion was to have Claude output a literal `GUARDRAIL:` prefix as the first token when it decides to block a query. That made detection a simple `text.startswith("GUARDRAIL:")` check rather than trying to parse Claude's natural language response with regex or another model call. It is a clean separation of concerns: Claude makes the judgment call, Python detects the signal. The same pattern was used for `Confidence: X.XX` in the self-critique output — structured tokens that Python can parse reliably without NLP.
+
+**One instance where the AI suggestion was flawed:**
+The initial generated code appended `response.content` — the raw list of pydantic model objects returned by the SDK — directly back into the messages list for the next API call. This looked correct because pydantic objects have all the right fields and the first call worked. But on the second call, the SDK tried to serialize those same pydantic objects again and failed with a type error deep inside `model_dump()`. The fix was to manually convert each content block to a plain dict before appending it. The AI-generated code passed a casual read and even worked partially — the bug only surfaced at the exact point where tool use looped back into an explanation turn, which is not a case covered by a simple unit test. It was a reminder that generated code that looks right is not the same as code that has been tested through the full execution path.
+
+---
+
+# Module 3 — Profile Comparisons
 
 ## Pair 1: Late-Night Studier vs. High-Energy Pop
 

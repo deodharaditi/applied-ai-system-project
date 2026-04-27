@@ -20,13 +20,13 @@ First, genre and mood are checked as yes/no questions. If the song's genre match
 
 Second, the remaining features — energy, emotional tone (valence), tempo, acousticness, vocal density (speechiness), and instrumentalness — are scored by closeness. A song that has almost the same energy as the user's target gets nearly full points. A song that is far off gets fewer points. The idea is that a song is not better just because it has a high energy value; it is better because its energy is *close to what this specific user wants*.
 
-All scores are added up. The maximum possible score is 7.75 points. Songs are then ranked from highest to lowest, and the top 5 are returned as recommendations.
+All scores are added up. The maximum possible score is 9.50 points. Songs are then ranked from highest to lowest, and the top 5 are returned as recommendations.
 
 ---
 
 ## 4. Data
 
-The catalog has 20 songs stored in a CSV file. Each song has 12 attributes: id, title, artist, genre, mood, energy, tempo, valence, danceability, acousticness, speechiness, and instrumentalness.
+The catalog has 20 songs stored in a CSV file. Each song has 17 attributes: id, title, artist, genre, mood, energy, tempo_bpm, valence, danceability, acousticness, speechiness, instrumentalness, popularity, release_decade, liveness, loudness_norm, and explicit.
 
 The catalog covers 14 genres including lofi, pop, rock, jazz, folk, blues, metal, hip-hop, r&b, classical, edm, synthwave, country, and k-pop. Moods include chill, focused, happy, intense, melancholic, sad, aggressive, peaceful, and more.
 
