@@ -8,7 +8,7 @@ This is the final applied AI extension of **VibeMatcher 1.0**, originally built 
 
 ## Video Walkthrough
 
-▶️ [Watch on Loom](https://loom.com/share/YOUR_LINK_HERE)
+▶️ [Watch on Loom](https://www.loom.com/share/3bb085d67f134210a0416ee1c7d33f78)
 
 The walkthrough demonstrates an end-to-end run covering three cases: a clear study request (no clarification needed), an ambiguous gym request (clarifying question triggered), and an off-topic input (guardrail fires). It also shows the eval harness running all 5 predefined queries with pass/fail output.
 
